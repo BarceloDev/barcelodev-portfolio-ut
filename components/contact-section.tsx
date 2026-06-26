@@ -1,17 +1,19 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
-import { CheckCircle2, Mail, Send } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Mail, Send } from 'lucide-react'
 import { SOCIALS } from '@/lib/portfolio-data'
 
 type Errors = Partial<Record<'name' | 'email' | 'message', string>>
+type Status = 'idle' | 'sending' | 'sent' | 'error'
 
 export function ContactSection() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
   const [errors, setErrors] = useState<Errors>({})
-  const [sent, setSent] = useState(false)
+  const [status, setStatus] = useState<Status>('idle')
+  const [errorMessage, setErrorMessage] = useState('')
 
   function validate(): Errors {
     const next: Errors = {}
@@ -25,19 +27,42 @@ export function ContactSection() {
     return next
   }
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     const found = validate()
     setErrors(found)
     if (Object.keys(found).length > 0) return
 
-    const subject = encodeURIComponent('Contato com Guilherme Barcelo')
-    const body = encodeURIComponent(
-      `Olá, vim pelo seu portfolio...\n\nNome: ${name}\nEmail: ${email}\n\n${message}`,
-    )
-    window.location.href = `mailto:${SOCIALS.email}?subject=${subject}&body=${body}`
-    setSent(true)
-    setTimeout(() => setSent(false), 5000)
+    setStatus('sending')
+    setErrorMessage('')
+
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, message }),
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        throw new Error(data?.error || 'Não foi possível enviar sua mensagem.')
+      }
+
+      setName('')
+      setEmail('')
+      setMessage('')
+      setErrors({})
+      setStatus('sent')
+      setTimeout(() => setStatus('idle'), 6000)
+    } catch (err) {
+      setStatus('error')
+      setErrorMessage(
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível enviar sua mensagem. Tente novamente.',
+      )
+    }
   }
 
   const fieldClass =
@@ -71,6 +96,7 @@ export function ContactSection() {
               placeholder="Seu nome"
               className={fieldClass}
               aria-invalid={!!errors.name}
+              disabled={status === 'sending'}
             />
             {errors.name && (
               <p className="mt-1.5 text-sm text-destructive">{errors.name}</p>
@@ -89,6 +115,7 @@ export function ContactSection() {
               placeholder="voce@email.com"
               className={fieldClass}
               aria-invalid={!!errors.email}
+              disabled={status === 'sending'}
             />
             {errors.email && (
               <p className="mt-1.5 text-sm text-destructive">{errors.email}</p>
@@ -107,6 +134,7 @@ export function ContactSection() {
               placeholder="Olá, vim pelo seu portfolio..."
               className={`${fieldClass} resize-none`}
               aria-invalid={!!errors.message}
+              disabled={status === 'sending'}
             />
             {errors.message && (
               <p className="mt-1.5 text-sm text-destructive">{errors.message}</p>
@@ -115,13 +143,11 @@ export function ContactSection() {
 
           <button
             type="submit"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground transition-all hover:opacity-90 active:scale-[0.99]"
+            disabled={status === 'sending'}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground transition-all hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {sent ? (
-              <>
-                <CheckCircle2 className="h-5 w-5" />
-                Abrindo seu email...
-              </>
+            {status === 'sending' ? (
+              <>Enviando...</>
             ) : (
               <>
                 <Send className="h-5 w-5" />
@@ -130,7 +156,21 @@ export function ContactSection() {
             )}
           </button>
 
-          <a
+          {status === 'sent' && (
+            <p className="flex items-center justify-center gap-2 text-center text-sm font-medium text-emerald-500">
+              <CheckCircle2 className="h-5 w-5" />
+              Agradeço pelo contato! Responderei em breve 😊
+            </p>
+          )}
+
+          {status === 'error' && (
+            <p className="flex items-center justify-center gap-2 text-center text-sm font-medium text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              {errorMessage}
+            </p>
+          )}
+
+          
             href={`mailto:${SOCIALS.email}`}
             className="flex items-center justify-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"
           >
